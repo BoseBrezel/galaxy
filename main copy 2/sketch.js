@@ -242,8 +242,7 @@ function start_explosion()
           stars[i].move();
         }
       
-        if (shaded)
-        {
+        if (shaded) {
           // Display shader.
           shaderTexture.shader(theShader);
           let data = serializeSketch();
@@ -262,11 +261,11 @@ function start_explosion()
             point(trail[i][0], trail[i][1]);
           }
         }
+      
         pop();
     }  
 }
-function keyPressed()
-{
+function keyPressed() {
   if (key === 'm') {
     if (pulsarDistance > -301)
     { 
