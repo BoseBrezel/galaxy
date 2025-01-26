@@ -40,7 +40,8 @@ void main() {
     vec2 uv = fragCoord.xy/iResolution.xy*2.0-1.0;
     vec3 starPos = vec3(0.0,1.0,1.0);
 
-    fragColor.rgb = vec3(0.0,0.5,0.3) * dist
+    fragColor.rgb = vec3(0.0,0.5,0.3);
+    fragColor.a = 1.0;
 
     
 }
