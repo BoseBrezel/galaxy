@@ -1,4 +1,4 @@
-var start = false;
+var start = true;
 const MAX_PARTICLE_COUNT = 100;
 const MAX_TRAIL_COUNT = 30;
 
@@ -10,7 +10,6 @@ var trail = [];
 var stars = [];
 var explosionTriggered = false; // Zustand für die Explosion
 var allParticlesGone = false; // Zustand für das Verschwinden der Partikel
-
 
 var universebool = false;
 let galaxy = [];
@@ -30,7 +29,7 @@ var big_crunch = false;
 
 var big_rip_bool = false;
 
-var pulsar = true;
+var pulsar = false;
 let radius = 200; // Radius der Kugel
 let centerX = 0, centerY = 0; // Mittelpunkt der Kugel im WebGL-Canvas
 let distanceFactor = 2; // Abstandsfaktor für den blauen Punkt und türkise Punkte
@@ -42,7 +41,7 @@ let x7, y7, z7; // Zweiter Kontrollpunkt zwischen blau und grün
 let numCurves = 12; // Anzahl der Kurven
 let time = 0; // Zeit für Animation
 let pulsarDistance = -6000; // Startentfernung des Pulsars
-let pulsarApproachSpeed = 50; //eig 5  
+let pulsarApproachSpeed = 5; //eig 5  
 
 let y5Base = 0; // Basis für noise
 let y5Offset = 0; // Dynamischer Offset
@@ -68,25 +67,38 @@ let flying_stars_back = [];
 
 let camera;
 
+var startTime;
+
+//Sounds
+let explosionMP3;
+let explosionPlayed = false;
+
+let atmosMP3;
+let atmosmusicPlayed = false;
+
+let darknessMp3;
+let darknessMp3Played = false;
+
 function preload() {
   theShader = new p5.Shader(this.renderer, vertShader, fragShader);
+  atmosMP3 = loadSound('music/atmosphere-sound-effect.mp3');
+  explosionMP3 = loadSound('music/explosion.mp3');
+  darknessMp3 = loadSound('music/Darkness-1.mp3');
+
 } 
 function setup()
 {
-  createCanvas(windowWidth, windowHeight, WEBGL);
+  startTime = millis();
   pixelDensity(1);
   noStroke();
+  atmosMP3.loop();
+  let canvas = createCanvas(windowWidth, windowHeight, WEBGL);
 
-  let canvas = createCanvas(
-    min(windowWidth, windowHeight),
-    min(windowWidth, windowHeight),
-    WEBGL
-  );
 
   canvas.canvas.oncontextmenu = () => false; // Removes right-click menu.
   noCursor();
 
-  shaderTexture = createGraphics(width, height, WEBGL);
+  shaderTexture = createGraphics(windowWidth, windowHeight, WEBGL);
   shaderTexture.noStroke();
 
   // Initialisiere Partikel
@@ -95,8 +107,6 @@ function setup()
     let y = random(0, windowHeight);
     stars.push(new Particle(x, y, mouseX, mouseY));
   }
-
-
 
   //pulsar
   smooth();  // Aktiviert die Kantenglättung
@@ -144,13 +154,16 @@ function draw(){
   if (start) {
     start_explosion();
   }
-  if (startgate) {
+  if (startgate)
+  {
+    pulsar = true
     startgate_start();
   }
   if (pulsar) {
     pulsarSzene();
   }
-  if (startgate_back_bool) {
+  if (startgate_back_bool)
+  {
     startgate_back();
   }
 
@@ -163,7 +176,8 @@ function draw(){
 
 function mousePressed()
 {
-  if (!explosionTriggered) {
+  if (!explosionTriggered)
+  {
     mousePressedSpeedBoost = true; // Aktivieren des Geschwindigkeitsboosts
     mousePressStartTime = millis(); // Startzeitpunkt speichern
   }
@@ -176,101 +190,112 @@ function mouseReleased()
 
 }
 function start_explosion()
-{
-  push(); // Speichert den aktuellen Transformationszustand
-  
-  
-  if (!explosionTriggered)
-  {
-    // Trim end of trail.
-    trail.push([mouseX, mouseY]);
-    if (trail.length > MAX_TRAIL_COUNT) {
-      trail.splice(0, 1);
-    }
-  }
-  else
-  {
-    // Entferne den Trail nach der Explosion
-    if (trail.length > 0)
+{  
+  let elapsedTime = millis() - startTime;
+    if (elapsedTime < 10000)
     {
-      trail.splice(0, 1); // Reduziere die Trail-Länge
+      return;
     }
-  }
+    else{
+      push(); // Speichert den aktuellen Transformationszustand
+      if(!darknessMp3Played)
+        {
+          darknessMp3.play(); 
+          darknessMp3Played = true; 
+        }
+      if (!explosionTriggered)
+        {
+          // Trim end of trail.
+          trail.push([mouseX, mouseY]);
+          if (trail.length > MAX_TRAIL_COUNT) {
+            trail.splice(0, 1);
+          }
+        }
+        else
+        {
+          // Entferne den Trail nach der Explosion
+          if (trail.length > 0)
+          {
+            trail.splice(0, 1); // Reduziere die Trail-Länge
+          }
+        }
+      
+        translate(-width / 2, -height / 2);
+      
+        if (!explosionTriggered)
+        {
+          // Prüfe, ob alle Partikel die Mausposition erreicht haben
+          let allReached = true;
+          for (let i = 0; i < stars.length; i++) {
+            if (!stars[i].reached(mouseX, mouseY)) {
+              allReached = false;
+              break;
+            }
+          }
+          // Wenn alle angekommen und Maus gedrückt ist, Explosion auslösen
+          if (allReached && mouseIsPressed)
+          {
+            explosionTriggered = true;
+            explosionMP3.play(); 
 
-  translate(-width / 2, -height / 2);
-
-  if (!explosionTriggered) {
-    // Prüfe, ob alle Partikel die Mausposition erreicht haben
-    let allReached = true;
-    for (let i = 0; i < stars.length; i++) {
-      if (!stars[i].reached(mouseX, mouseY)) {
-        allReached = false;
-        break;
-      }
-    }
-
-    // Wenn alle angekommen und Maus gedrückt ist, Explosion auslösen
-    if (allReached && mouseIsPressed)
-    {
-      explosionTriggered = true;
-      for (let i = 0; i < stars.length; i++)
-      {
-        stars[i].explode();
-      }
-    }
-  }
-  else if (!allParticlesGone)
-  {
-    // Prüfe, ob alle Partikel das Sichtfeld verlassen haben
-    allParticlesGone = stars.every((particle) => particle.isOutOfView());
-  }
-  if(allParticlesGone)
-  {
-    startgate = true;
-    pulsar = true;
-    shader = false;
-    return;
-  }
-
-  // Move and render particles
-  for (let i = stars.length - 1; i >= 0; i--) {
-    stars[i].move();
-  }
-
-  if (shaded) {
-    // Display shader.
-    shaderTexture.shader(theShader);
-    let data = serializeSketch();
-    theShader.setUniform("resolution", [width, height]);
-    theShader.setUniform("trailCount", trail.length);
-    theShader.setUniform("trail", data.trails);
-    theShader.setUniform("starsCount", stars.length);
-    theShader.setUniform("stars", data.stars);
-    theShader.setUniform("colors", data.colors);
-    shaderTexture.rect(0, 0, width, height);
-    texture(shaderTexture);
-    rect(0, 0, width, height);
-  } else {
-    stroke(0, 255, 255);
-    for (let i = 0; i < trail.length; i++) {
-      point(trail[i][0], trail[i][1]);
-    }
-  }
-
-  pop();
+            for (let i = 0; i < stars.length; i++)
+            {
+              stars[i].explode();
+            }
+          }
+        }
+        else if (!allParticlesGone)
+        {
+          // Prüfe, ob alle Partikel das Sichtfeld verlassen haben
+          allParticlesGone = stars.every((particle) => particle.isOutOfView());
+        }
+        if(allParticlesGone)
+        {
+          startgate = true;
+          shader = false;
+          return;
+        }
+      
+        // Move and render particles
+        for (let i = stars.length - 1; i >= 0; i--) {
+          stars[i].move();
+        }
+      
+        if (shaded) {
+          // Display shader.
+          shaderTexture.shader(theShader);
+          let data = serializeSketch();
+          theShader.setUniform("resolution", [width, height]);
+          theShader.setUniform("trailCount", trail.length);
+          theShader.setUniform("trail", data.trails);
+          theShader.setUniform("starsCount", stars.length);
+          theShader.setUniform("stars", data.stars);
+          theShader.setUniform("colors", data.colors);
+          shaderTexture.rect(0, 0, width, height);
+          texture(shaderTexture);
+          rect(0, 0, width, height);
+        } else {
+          stroke(0, 255, 255);
+          for (let i = 0; i < trail.length; i++) {
+            point(trail[i][0], trail[i][1]);
+          }
+        }
+      
+        pop();
+    }  
 }
 function keyPressed() {
   if (key === 'm') {
-    if (pulsarDistance <= -300) { // Überprüfen, ob der Pulsar vollständig sichtbar ist
-      startgate = false; // Stargate deaktivieren
-      startgate_back_bool = true; // Stargate_back aktivieren
-      // Pulsar zurückziehen lassen
+    if (pulsarDistance > -301)
+    { 
+      startgate = false; 
+      startgate_back_bool = true; 
       let pulsarShrinkInterval = setInterval(() =>
       {
-        if(pulsarDistance > -6000)
+        if(pulsarDistance >= -4000 )
         {
-          pulsarDistance -= pulsarApproachSpeed;
-          exclusionRadius -= 0.23;
+          pulsarDistance -= 15;
+          exclusionRadius -= 0.2;
         }
         else
         {
@@ -302,15 +327,19 @@ function startgate_start()
 function pulsarSzene()
 {  
   // Berechnung der Annäherung
-  if(pulsarDistance < radius - 500) { // Stoppt, wenn der Pulsar nah genug ist
-    pulsarDistance += pulsarApproachSpeed;
-    print(pulsarDistance);
-
-    exclusionRadius += 0.23;
+  if(!startgate_back_bool)
+  {
+    if(pulsarDistance < radius - 500) { // Stoppt, wenn der Pulsar nah genug ist
+      pulsarDistance += pulsarApproachSpeed;
+      exclusionRadius += 0.23;
+    }
   }
+ 
   // Kamera-Einstellung für Entfernung
   push();
-  translate(0, 0, pulsarDistance);
+
+  translate(width / 2, height / 2, pulsarDistance);
+
   // Kugel rotieren lassen
   rotateY(frameCount * 0.01);
   rotateX(frameCount * 0.01);
@@ -400,11 +429,11 @@ function pulsarSzene()
   pop();
 }
 
-function startgate_back() {
+function startgate_back()
+{
   let allStopped = true; // Annahme: alle Sterne stehen still
 
   push(); // Speichert den aktuellen Transformationszustand
-  translate(-width / 2, -height / 2);
 
   for (let i = 0; i < flying_stars_back.length; i++) {
     flying_stars_back[i].display(exclusionRadius);
@@ -501,7 +530,7 @@ function Particle(x, y, vx, vy) {
         this.vel.x = mouseX - this.pos.x ;
         this.vel.y = mouseY - this.pos.y ;
         this.vel.normalize();
-        this.vel.mult(2);
+        this.vel.mult(6);
         this.pos.add(this.vel);
       }
       else

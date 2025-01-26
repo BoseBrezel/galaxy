@@ -11,7 +11,7 @@ class FylingStar_back {
       this.toDraw = true;
       this.trail = []; // Trail for the star's path
       this.maxSpeedDuration = 100; // Duration of maximum speed
-      this.mediumSpeedDuration = 200; // Duration of maximum speed
+      this.mediumSpeedDuration = 400; // Duration of maximum speed
       this.mediumDecrease = true; // Duration of maximum speed
 
    }
