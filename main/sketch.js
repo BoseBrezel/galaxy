@@ -1,9 +1,15 @@
 var start = false;
-const maxStars = 300; // Maximale Anzahl von Stars
-let mousePressedSpeedBoost = false; // Flag, ob die Maus gedrückt ist
-let mousePressStartTime = 0; // Zeitpunkt, wann die Maus gedrückt wurde
-const explosionDelay = 5000; // Zeit in Millisekunden bis zur Explosion
-let explosionTriggered = false; // Flag, um Explosion zu markieren
+const MAX_PARTICLE_COUNT = 100;
+const MAX_TRAIL_COUNT = 30;
+
+var colorScheme = ["#48A3FA", "#230A59", "#91225B"];
+var shaded = true;
+var theShader;
+var shaderTexture;
+var trail = [];
+var stars = [];
+var explosionTriggered = false; // Zustand für die Explosion
+var allParticlesGone = false; // Zustand für das Verschwinden der Partikel
 
 
 var universebool = false;
@@ -35,8 +41,8 @@ let x6, y6, z6; // Erster Kontrollpunkt zwischen rot und blau
 let x7, y7, z7; // Zweiter Kontrollpunkt zwischen blau und grün
 let numCurves = 12; // Anzahl der Kurven
 let time = 0; // Zeit für Animation
-let pulsarDistance = 6000; // Startentfernung des Pulsars
-let pulsarApproachSpeed = 500; //eig 5  
+let pulsarDistance = -6000; // Startentfernung des Pulsars
+let pulsarApproachSpeed = 50; //eig 5  
 
 let y5Base = 0; // Basis für noise
 let y5Offset = 0; // Dynamischer Offset
@@ -57,39 +63,41 @@ let xOffset = 0; // Dynamischer Offset
 let zBase = 0; // Basis für noise
 let zOffset = 0; // Dynamischer Offset
 
-let stars = []; 
 let flying_stars = []; 
 let flying_stars_back = []; 
 
-function updateY5ToFleeMouse() {
-  // Berechne die Mausposition im 3D-Raum
-  let mouse = createVector(mouseX - width / 2, mouseY - height / 2, 0);
-  let y5Position = createVector(0, y5, 0); // Position von y5
-  
-  // Berechne die Richtung von der Maus zu y5
-  let fleeDirection = p5.Vector.sub(y5Position, mouse);
-  
-  // Berechne die Distanz
-  let distance = fleeDirection.mag();
-  
-  // Stärke der Abstoßung basierend auf der Distanz
-  let fleeStrength = 200; // Anpassen für gewünschtes Verhalten
-  if (distance < 300) { // Nur beeinflussen, wenn die Maus nah genug ist
-    fleeDirection.normalize(); // Richtung auf eine Länge von 1 setzen
-    fleeDirection.mult(fleeStrength / (distance + 1)); // Stärke der Abstoßung skalieren
-    
-    // Aktualisiere y5
-    y5 += fleeDirection.y;
-  }
-}
+let camera;
 
+function preload() {
+  theShader = new p5.Shader(this.renderer, vertShader, fragShader);
+} 
 function setup()
 {
   createCanvas(windowWidth, windowHeight, WEBGL);
   pixelDensity(1);
   noStroke();
 
-  
+  let canvas = createCanvas(
+    min(windowWidth, windowHeight),
+    min(windowWidth, windowHeight),
+    WEBGL
+  );
+
+  canvas.canvas.oncontextmenu = () => false; // Removes right-click menu.
+  noCursor();
+
+  shaderTexture = createGraphics(width, height, WEBGL);
+  shaderTexture.noStroke();
+
+  // Initialisiere Partikel
+  for (let i = 0; i < MAX_PARTICLE_COUNT; i++) {
+    let x = random(0, windowWidth);
+    let y = random(0, windowHeight);
+    stars.push(new Particle(x, y, mouseX, mouseY));
+  }
+
+
+
   //pulsar
   smooth();  // Aktiviert die Kantenglättung
     // Initialisiere feste Punkte
@@ -100,13 +108,16 @@ function setup()
     x4 = centerX;
     y4 = centerY + radius;
     z4 = 0;
+
   //starGate
   for (let i = 0; i < 500; i++) {
     flying_stars.push(new FylingStar());
   }
+  //starGate_back
   for (let i = 0; i < 500; i++) {
     flying_stars_back.push(new FylingStar_back());
   }
+
 // Erstelle 1000 Partikel für die Galaxie
 for (let i = 0; i < maxGalaxyParticles; i++) {
   let angle = random(TWO_PI * spiralTurns);
@@ -124,32 +135,31 @@ function windowResized()
   resizeCanvas(windowWidth, windowHeight);
 }
 
-function draw()
-{
-  
-  background(0); 
-  if (start)
-  {
+function draw(){
+
+  background(0);
+ // Berechnung des Vektors von der Mitte des Bildschirms zur Kugel
+
+  // Andere Szenen
+  if (start) {
     start_explosion();
   }
-  if (startgate)
-  {
+  if (startgate) {
     startgate_start();
   }
-  if (pulsar)
-  {
+  if (pulsar) {
     pulsarSzene();
   }
-  if (startgate_back_bool)
-  {
+  if (startgate_back_bool) {
     startgate_back();
   }
 
   if (big_rip_bool) {
     big_rip();
   }
-
 }
+
+
 
 function mousePressed()
 {
@@ -165,67 +175,105 @@ function mouseReleased()
   mousePressedSpeedBoost = false; // Deaktivieren des Geschwindigkeitsboosts
 
 }
-function start_explosion() {
+function start_explosion()
+{
   push(); // Speichert den aktuellen Transformationszustand
-  translate(-width / 2, -height / 2, 0); // Ursprung auf die Mitte des Bildschirms setzen
   
-  // Keine neuen Stars erstellen, wenn Explosion ausgelöst wurde
-  if (!explosionTriggered && stars.length < maxStars) {
-    let angle = random(TWO_PI);
-    let distance = random(radius); // Radius ist die maximale Entfernung vom Mittelpunkt
-    let x = cos(angle) * distance;
-    let y = sin(angle) * distance;
-
-    stars.push(new Star(x, y));
+  
+  if (!explosionTriggered)
+  {
+    // Trim end of trail.
+    trail.push([mouseX, mouseY]);
+    if (trail.length > MAX_TRAIL_COUNT) {
+      trail.splice(0, 1);
+    }
   }
-
-  // Alle Stars aktualisieren und zeichnen
-  for (let star of stars) {
-    star.update();
-    star.show();
-  }
-
-  // Star-Kollisionen behandeln
-  for (let i = 0; i < stars.length; i++) {
-    for (let j = i + 1; j < stars.length; j++) {
-      stars[i].checkCollision(stars[j]);
+  else
+  {
+    // Entferne den Trail nach der Explosion
+    if (trail.length > 0)
+    {
+      trail.splice(0, 1); // Reduziere die Trail-Länge
     }
   }
 
-  // Explosion auslösen, wenn Maus lange gedrückt gehalten wurde
-  if (!explosionTriggered && mousePressedSpeedBoost && millis() - mousePressStartTime >= explosionDelay) {
-    explosionTriggered = true;
+  translate(-width / 2, -height / 2);
 
-    for (let star of stars) {
-      let angle = random(TWO_PI);
-      let explosionForce = random(5, 15);
-      star.vx = cos(angle) * explosionForce;
-      star.vy = sin(angle) * explosionForce;
+  if (!explosionTriggered) {
+    // Prüfe, ob alle Partikel die Mausposition erreicht haben
+    let allReached = true;
+    for (let i = 0; i < stars.length; i++) {
+      if (!stars[i].reached(mouseX, mouseY)) {
+        allReached = false;
+        break;
+      }
     }
 
-    setTimeout(() => {
-      stars = [];
-      start = false;
-      startgate = true;
-      pulsar = true;
+    // Wenn alle angekommen und Maus gedrückt ist, Explosion auslösen
+    if (allReached && mouseIsPressed)
+    {
+      explosionTriggered = true;
+      for (let i = 0; i < stars.length; i++)
+      {
+        stars[i].explode();
+      }
+    }
+  }
+  else if (!allParticlesGone)
+  {
+    // Prüfe, ob alle Partikel das Sichtfeld verlassen haben
+    allParticlesGone = stars.every((particle) => particle.isOutOfView());
+  }
+  if(allParticlesGone)
+  {
+    startgate = true;
+    pulsar = true;
+    shader = false;
+    return;
+  }
 
-    }, 2000);
+  // Move and render particles
+  for (let i = stars.length - 1; i >= 0; i--) {
+    stars[i].move();
+  }
+
+  if (shaded) {
+    // Display shader.
+    shaderTexture.shader(theShader);
+    let data = serializeSketch();
+    theShader.setUniform("resolution", [width, height]);
+    theShader.setUniform("trailCount", trail.length);
+    theShader.setUniform("trail", data.trails);
+    theShader.setUniform("starsCount", stars.length);
+    theShader.setUniform("stars", data.stars);
+    theShader.setUniform("colors", data.colors);
+    shaderTexture.rect(0, 0, width, height);
+    texture(shaderTexture);
+    rect(0, 0, width, height);
+  } else {
+    stroke(0, 255, 255);
+    for (let i = 0; i < trail.length; i++) {
+      point(trail[i][0], trail[i][1]);
+    }
   }
 
   pop();
 }
 function keyPressed() {
   if (key === 'm') {
-    if (pulsarDistance <= radius + 100) { // Überprüfen, ob der Pulsar vollständig sichtbar ist
+    if (pulsarDistance <= -300) { // Überprüfen, ob der Pulsar vollständig sichtbar ist
       startgate = false; // Stargate deaktivieren
       startgate_back_bool = true; // Stargate_back aktivieren
-
       // Pulsar zurückziehen lassen
-      let pulsarShrinkInterval = setInterval(() => {
-        if (pulsarDistance < 6000) {
-          pulsarDistance += pulsarApproachSpeed;
+      let pulsarShrinkInterval = setInterval(() =>
+      {
+        if(pulsarDistance > -6000)
+        {
+          pulsarDistance -= pulsarApproachSpeed;
           exclusionRadius -= 0.23;
-        } else {
+        }
+        else
+        {
           clearInterval(pulsarShrinkInterval); // Intervall stoppen, wenn Pulsar vollständig zurückgezogen ist
           pulsar = false; // Pulsar deaktivieren
         }
@@ -241,59 +289,33 @@ function keyPressed() {
 function startgate_start()
 {
   push(); // Speichert den aktuellen Transformationszustand
-  translate(-width / 2, -height / 2, 0); // Ursprung auf die Mitte des Bildschirms setzen
-  
+  if(exclusionRadius > 30)
+  {
+    exclusionRadius += 0.23;
+  } 
   for (let i = 0; i < flying_stars.length; i++) {
     flying_stars[i].display(exclusionRadius);
     flying_stars[i].update();
  }
  pop();
 }
-function applyMouseRepulsion(point, mouse) {
-  let distance = dist(point.x, point.y, point.z, mouse.x, mouse.y, mouse.z);
-  let repulsionStrength = 200; // Stärke der Abstoßung
-  if (distance < 300) { // Innerhalb eines Radius von 300 wird beeinflusst
-    let force = p5.Vector.sub(point, mouse).normalize().mult(repulsionStrength / (distance + 1));
-    point.add(force);
-  }
-}
-
-function applyMouseRepulsion3D(point, origin) {
-  let mouse = createVector(mouseX - width / 2, mouseY - height / 2, 0); // Mausposition im 3D-Raum
-  let distance = dist(point.x, point.y, point.z, mouse.x, mouse.y, mouse.z);
-  let repulsionStrength = 200000; // Stärke der Abstoßung
-  let maxDisplacement = 200; // Maximale Abweichung vom Ursprungsort
-
-  if (distance < 300) { // Innerhalb eines Radius von 300 wird beeinflusst
-    let force = p5.Vector.sub(point, mouse).normalize().mult(repulsionStrength / (distance + 1));
-    point.add(force);
-
-    // Begrenzung der Bewegung auf +-200 Pixel um den Ursprungsort
-    point.x = constrain(point.x, origin.x - maxDisplacement, origin.x + maxDisplacement);
-    point.y = constrain(point.y, origin.y - maxDisplacement, origin.y + maxDisplacement);
-    point.z = constrain(point.z, origin.z - maxDisplacement, origin.z + maxDisplacement);
-  }
-}
-
-
 function pulsarSzene()
-{
+{  
   // Berechnung der Annäherung
-  if (pulsarDistance > radius + 300) { // Stoppt, wenn der Pulsar nah genug ist
-    pulsarDistance -= pulsarApproachSpeed;
+  if(pulsarDistance < radius - 500) { // Stoppt, wenn der Pulsar nah genug ist
+    pulsarDistance += pulsarApproachSpeed;
+    print(pulsarDistance);
+
     exclusionRadius += 0.23;
   }
-
   // Kamera-Einstellung für Entfernung
   push();
-  translate(0, 0, -pulsarDistance); // Bewegt die Szene in die Kamera hinein
-
-  // Licht hinzufügen
-
+  translate(0, 0, pulsarDistance);
   // Kugel rotieren lassen
   rotateY(frameCount * 0.01);
   rotateX(frameCount * 0.01);
   rotateZ(frameCount * 0.01);
+
   // Kugel
   noStroke();
   normalMaterial();
@@ -305,26 +327,25 @@ function pulsarSzene()
     map(cos(frameCount * 0.05), -1, 1, 0, 255), // Grün-Intensität
     map(sin(frameCount * 0.05 + PI / 2), -1, 1, 0, 255) // Blau-Intensität
   );
-
-  // Schimmer-Effekt für den Nordpol-Zylinder
+  let northPolePosition = createVector(0, -150, 0); // Nordpol-Zylinder
+  let southPolePosition = createVector(0, 150, 0); // Südpol-Zylinder
+  
   push();
-  translate(0, -150, 0); // Oberhalb der Kugel
   fill(shimmerColor.levels[0], shimmerColor.levels[1], shimmerColor.levels[2], 50); // Halbtransparenter Zylinder
   cylinder(40, 8200, 24, 1); // Großer Zylinder für Schimmer-Effekt
   emissiveMaterial(shimmerColor.levels[0], shimmerColor.levels[1], shimmerColor.levels[2]); // Leuchtende Farbe
   cylinder(10, 8000, 24, 1); // Langer Zylinder für den Strahl
+
   pop();
 
   // Schimmer-Effekt für den Südpol-Zylinder
   push();
-  translate(0, 150, 0); // Unterhalb der Kugel
   fill(shimmerColor.levels[0], shimmerColor.levels[1], shimmerColor.levels[2], 50); // Halbtransparenter Zylinder
   cylinder(40, 8200, 24, 1); // Großer Zylinder für Schimmer-Effekt
   emissiveMaterial(shimmerColor.levels[0], shimmerColor.levels[1], shimmerColor.levels[2]); // Leuchtende Farbe
   cylinder(10, 8000, 24, 1); // Langer Zylinder für den Strahl
-  pop();
 
-  // Magnetlinien
+  pop();
 
   //y5Noise
   y5Base += 0.004; // Fortschritt für noise
@@ -346,17 +367,15 @@ function pulsarSzene()
   xBase += 0.008; // Fortschritt für noise
   xOffset = map(noise(yBase), 0, 1, -50, 50); // Rauschwert skalieren
 
-
-
-
-  y5 = (y4 + y1) / 2 +y5Offset; // Dynamischer y5-Wert
+  y5 = (y4 + y1) / 2 + y5Offset; // Dynamischer y5-Wert
   y6 = centerY - radius + yOffset;
   y7 = centerY + radius - yOffset;
 
-  for (let i = 0; i < numCurves; i++) {
+  for (let i = 0; i < numCurves; i++)
+  {
     let angleOffset = (TWO_PI / numCurves) * i;
     let x5 = centerX + radius * distanceFactor * cos(angleOffset) + x5Offset / 60 ;
-    let z5 = radius * distanceFactor * sin(angleOffset) +z5Offset / 60;
+    let z5 = radius * distanceFactor * sin(angleOffset) + z5Offset / 60;
 
     let x6 = (x1 + x5) / 2 + xOffset;
     let z6 = (z1 + z5) / 2 + zOffset; 
@@ -365,6 +384,7 @@ function pulsarSzene()
 
     beginShape();
     stroke(255, 0, 0);
+    strokeWeight(2);
     noFill();
     curveVertex(0, 0, 0);
     curveVertex(x1, y1, z1);
@@ -375,15 +395,16 @@ function pulsarSzene()
     curveVertex(0, 0, 0);
     endShape();
   }
+
   time += 0.01;
   pop();
-
 }
+
 function startgate_back() {
   let allStopped = true; // Annahme: alle Sterne stehen still
 
   push(); // Speichert den aktuellen Transformationszustand
-  translate(-width / 2, -height / 2, 0); // Ursprung auf die Mitte des Bildschirms setzen
+  translate(-width / 2, -height / 2);
 
   for (let i = 0; i < flying_stars_back.length; i++) {
     flying_stars_back[i].display(exclusionRadius);
@@ -409,7 +430,6 @@ function big_crunch()
 }
 function big_rip() {
   push();
-  translate(-width / 2, -height / 2, 0);
 
   // Update Galaxy Particles
   for (let particle of galaxy)
@@ -427,3 +447,152 @@ function big_rip() {
 
   pop();
 }
+
+
+function serializeSketch() {
+  let data = {
+    trails: [],
+    stars: [],
+    colors: []
+  };
+
+  for (let i = 0; i < trail.length; i++) {
+    data.trails.push(
+      map(trail[i][0], 0, width, 0.0, 1.0),
+      map(trail[i][1], 0, height, 1.0, 0.0)
+    );
+  }
+
+  for (let i = 0; i < stars.length; i++) {
+    data.stars.push(
+      map(stars[i].pos.x, 0, width, 0.0, 1.0),
+      map(stars[i].pos.y, 0, height, 1.0, 0.0),
+      stars[i].mass * stars[i].vel.mag() / 100
+    );
+
+    let itsColor = colorScheme[stars[i].colorIndex];
+    data.colors.push(red(itsColor), green(itsColor), blue(itsColor));
+  }
+
+  return data;
+}
+
+function Particle(x, y, vx, vy) {
+  this.pos = new p5.Vector(x, y);
+  this.vel = new p5.Vector(vx, vy);
+  this.vel.mult(random(3));
+  this.mass = random(10, 30);
+  this.airDrag = random(0.001, 0.2);
+  this.colorIndex = int(random(colorScheme.length));
+  this.exploding = false;
+
+  // Bewegung und Explosion
+  this.move = function()
+  {
+    if (this.exploding)
+    {
+      // Explosion: Partikel bewegen sich nach außen
+      this.pos.add(this.vel);
+    }
+    else
+    {
+      if(mouseIsPressed)
+      {
+        this.vel.x = mouseX - this.pos.x ;
+        this.vel.y = mouseY - this.pos.y ;
+        this.vel.normalize();
+        this.vel.mult(2);
+        this.pos.add(this.vel);
+      }
+      else
+      {
+        this.vel.x = mouseX - this.pos.x;
+        this.vel.y = mouseY - this.pos.y;
+        this.vel.normalize();
+        this.vel.mult(1);
+        this.pos.add(this.vel);
+      }  
+    }
+  
+  };
+
+  // Prüfen, ob der Partikel die Mausposition erreicht hat
+  this.reached = function(mx, my) {
+    return dist(this.pos.x, this.pos.y, mx, my) < 10;
+  };
+
+  // Prüfen, ob der Partikel das Sichtfeld verlassen hat
+  this.isOutOfView = function() {
+    return (
+      this.pos.x < 0 ||
+      this.pos.x > width ||
+      this.pos.y < 0 ||
+      this.pos.y > height
+    );
+  };
+
+  // Explosion auslösen
+  this.explode = function() {
+    this.exploding = true;
+    this.vel = p5.Vector.random2D();
+    this.vel.mult(random(10, 25));
+  };
+}
+
+
+let vertShader = `
+  precision highp float;
+
+  attribute vec3 aPosition;
+
+  void main() {
+    vec4 positionVec4 = vec4(aPosition, 1.0);
+    positionVec4.xy = positionVec4.xy * 2.0 - 1.0;
+    gl_Position = positionVec4;
+  }
+`;
+
+let fragShader = `
+  precision highp float;
+
+  uniform vec2 resolution;
+  uniform int trailCount;
+  uniform vec2 trail[${MAX_TRAIL_COUNT}];
+  uniform int starsCount;
+  uniform vec3 stars[${MAX_PARTICLE_COUNT}];
+  uniform vec3 colors[${MAX_PARTICLE_COUNT}];
+
+  void main() {
+    vec2 st = gl_FragCoord.xy / resolution.xy;
+
+    float r = 0.0;
+    float g = 0.0;
+    float b = 0.0;
+
+    for (int i = 0; i < ${MAX_TRAIL_COUNT}; i++) {
+      if (i < trailCount) {
+        vec2 trailPos = trail[i];
+        float value = float(i) / distance(st, trailPos.xy) * 0.00015; 
+        g += value * 0.3;
+        b += value;
+      }
+    }
+
+    float mult = 0.00001;
+
+    for (int i = 0; i < ${MAX_PARTICLE_COUNT}; i++) {
+      if (i < starsCount) {
+        vec3 particle = stars[i];
+        vec2 pos = particle.xy;
+        float mass = particle.z;
+        vec3 color = colors[i];
+
+        r += color.r / distance(st, pos) * mult * mass;
+        g += color.g / distance(st, pos) * mult * mass;
+        b += color.b / distance(st, pos) * mult * mass;
+      }
+    }
+
+    gl_FragColor = vec4(r, g, b, 1.0);
+  }
+`;

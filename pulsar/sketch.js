@@ -117,7 +117,7 @@ function draw() {
     curveVertex(0, 0, 0);
     endShape();
   }
-
+s
   // Erhöhe die Zeit für die Animation
   time += 0.01;
 }
