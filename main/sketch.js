@@ -25,6 +25,9 @@ var big_crunch = false;
 var big_rip_bool = false;
 
 var pulsar = true;
+var pulsarShaderTexture;
+let pulsarShader;
+let noiseTextureImg;
 let radius = 200; // Radius der Kugel
 let centerX = 0, centerY = 0; // Mittelpunkt der Kugel im WebGL-Canvas
 let distanceFactor = 2; // Abstandsfaktor für den blauen Punkt und türkise Punkte
@@ -83,12 +86,46 @@ function updateY5ToFleeMouse() {
   }
 }
 
+function setupShader()
+{
+  // Erstellen des Grapfik-Buffers
+  pulsarShaderTexture = createGraphics(width,height,WEBGL);
+  pulsarShaderTexture.noStroke();
+}
+
+function preload()
+{
+  // Laden der Shader
+  pulsarShader = loadShader("shader.vert","shader.frag");
+
+  // Laden der Noise-Textur
+  noiseTextureImg = loadImage("rgb_noise_med.png");
+
+}
+
+function drawShader(){
+  // Shader anzeigen
+  pulsarShaderTexture.shader(pulsarShader);
+  // Uniforms in Shader laden
+  pulsarShader.setUniform('iResolution', [width, height, 0.2]);
+  pulsarShader.setUniform('iTime', millis() / 1000.0);
+  pulsarShader.setUniform("iRot1",0);
+  pulsarShader.setUniform("iChannel0", noiseTextureImg);
+  pulsarShader.setUniform("iMouse",[0,0,mouseX,mouseY]);
+  
+  // In der Textur muss etwas gemalt werden, damit sie sichtbarist
+  // Keine Ahnung warum, aber ich mach die regeln auch nicht
+  pulsarShaderTexture.rect(0,0);
+}
+
 function setup()
 {
   createCanvas(windowWidth, windowHeight, WEBGL);
   pixelDensity(1);
   noStroke();
 
+  // Shader-Buffer Initialisieren
+  setupShader();
   
   //pulsar
   smooth();  // Aktiviert die Kantenglättung
@@ -298,6 +335,7 @@ function pulsarSzene()
   noStroke();
   normalMaterial();
   sphere(radius);
+  
 
   // Zufällige Schimmerfarbe generieren
   let shimmerColor = color(
@@ -377,6 +415,20 @@ function pulsarSzene()
   }
   time += 0.01;
   pop();
+
+  
+  rotateX(3.188);
+  rotateY(1.44);
+  console.log([mouseX/500,mouseY/500,frameCount * 0.01]);
+  rotateZ(0.6);
+   // Textur auf Kugel setzen
+   drawShader();
+   tint(255,127);
+   texture(pulsarShaderTexture);
+   
+   sphere(radius+100);
+   
+   frameRate(55);
 
 }
 function startgate_back() {
