@@ -26,8 +26,11 @@ var big_rip_bool = false;
 
 var pulsar = true;
 var pulsarShaderTexture;
+var glowShaderTexture;
 let pulsarShader;
+let glowShader;
 let noiseTextureImg;
+let starsTexturImg;
 let radius = 200; // Radius der Kugel
 let centerX = 0, centerY = 0; // Mittelpunkt der Kugel im WebGL-Canvas
 let distanceFactor = 2; // Abstandsfaktor für den blauen Punkt und türkise Punkte
@@ -88,18 +91,23 @@ function updateY5ToFleeMouse() {
 
 function setupShader()
 {
-  // Erstellen des Grapfik-Buffers
+  // Erstellen der Grapfik-Buffer
   pulsarShaderTexture = createGraphics(width,height,WEBGL);
   pulsarShaderTexture.noStroke();
+
+  glowShaderTexture = createGraphics(width,height,WEBGL);
+  glowShaderTexture.noStroke();
+  
 }
 
 function preload()
 {
   // Laden der Shader
-  pulsarShader = loadShader("shader.vert","shader.frag");
-
+  pulsarShader = loadShader("shaderPulsar.vert","shaderPulsar.frag");
+  glowShader = loadShader("shaderGlow.vert","shaderGlow.frag");
   // Laden der Noise-Textur
   noiseTextureImg = loadImage("rgb_noise_med.png");
+  starsTexturImg = loadImage("stars.jpg");
 
 }
 
@@ -108,7 +116,6 @@ function drawShader(){
   pulsarShaderTexture.shader(pulsarShader);
   // Uniforms in Shader laden
   pulsarShader.setUniform('iResolution', [width, height, 0.2]);
-  console.log([mouseX/width, mouseY/height, 0.2]);
   pulsarShader.setUniform('iTime', millis() / 1000.0);
   pulsarShader.setUniform("iRot1",0);
   pulsarShader.setUniform("iChannel0", noiseTextureImg);
@@ -117,6 +124,16 @@ function drawShader(){
   // In der Textur muss etwas gemalt werden, damit sie sichtbarist
   // Keine Ahnung warum, aber ich mach die regeln auch nicht
   pulsarShaderTexture.rect(0,0);
+
+  glowShaderTexture.shader(glowShader);
+
+  glowShader.setUniform('iResolution', [width, height, 0.2]);
+  glowShader.setUniform('iTime', millis() / 1000.0);
+  glowShader.setUniform("iRot1",0);
+  glowShader.setUniform("iChannel0", starsTexturImg);
+  glowShader.setUniform("iMouse",[0,0,mouseX,mouseY]);
+
+  glowShaderTexture.rect(0,0);
 }
 
 function setup()
@@ -346,7 +363,6 @@ function pulsarSzene()
     map(cos(frameCount * 0.05), -1, 1, 0, 255), // Grün-Intensität
     map(sin(frameCount * 0.05 + PI / 2), -1, 1, 0, 255) // Blau-Intensität
   );
-
   // Schimmer-Effekt für den Nordpol-Zylinder
   push();
   translate(0, -150, 0); // Oberhalb der Kugel
@@ -418,19 +434,28 @@ function pulsarSzene()
   }
   time += 0.01;
   pop();
+  drawShader();
+  noStroke();
+  tint(255,100);
+  texture(noiseTextureImg);
+  //translate(0,0,mouseX-width/2);
+  console.log(mouseX-width/2)
+  //circle(0,0,radius,radius);
 
   // Äusere Sphere auf "Magic Angle" setzen um Graphikfehler zu vermeiden
-  rotateX(3.188);
-  rotateY(1.44);
-  rotateZ(0.6);
-   // Textur auf Kugel setzen
-   drawShader();
-   tint(255,1);
-   texture(noiseTextureImg);
-   
-   sphere(radius+100);
-   
-   frameRate(55);
+  
+  blendMode(LIGHTEST);
+  // Textur auf Kugel setzen
+  tint(255,255);
+  
+  texture(glowShaderTexture);
+  //translate(0,0,-mouseX);
+  rect(-width/2,-height/2,width,height);
+  blendMode(BLEND);
+
+ 
+  
+  frameRate(55);
 
 }
 function startgate_back() {
