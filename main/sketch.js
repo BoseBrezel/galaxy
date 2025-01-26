@@ -108,6 +108,7 @@ function drawShader(){
   pulsarShaderTexture.shader(pulsarShader);
   // Uniforms in Shader laden
   pulsarShader.setUniform('iResolution', [width, height, 0.2]);
+  console.log([mouseX/width, mouseY/height, 0.2]);
   pulsarShader.setUniform('iTime', millis() / 1000.0);
   pulsarShader.setUniform("iRot1",0);
   pulsarShader.setUniform("iChannel0", noiseTextureImg);
@@ -334,6 +335,8 @@ function pulsarSzene()
   // Kugel
   noStroke();
   normalMaterial();
+  //Pulsar shadren
+  texture(pulsarShaderTexture);
   sphere(radius);
   
 
@@ -416,15 +419,14 @@ function pulsarSzene()
   time += 0.01;
   pop();
 
-  
+  // Äusere Sphere auf "Magic Angle" setzen um Graphikfehler zu vermeiden
   rotateX(3.188);
   rotateY(1.44);
-  console.log([mouseX/500,mouseY/500,frameCount * 0.01]);
   rotateZ(0.6);
    // Textur auf Kugel setzen
    drawShader();
-   tint(255,127);
-   texture(pulsarShaderTexture);
+   tint(255,1);
+   texture(noiseTextureImg);
    
    sphere(radius+100);
    

@@ -10,6 +10,7 @@ uniform vec4 iMouse;
 out vec4 fragColor;
 
 #define time iTime * 0.5
+#define M_PI 3.1415926535897932384626433832795
 
 float noise3D(vec3 p)
 {
@@ -140,15 +141,20 @@ void main()
 {
     vec2 fragCoord = gl_FragCoord.xy;
     vec2 uv = fragCoord / iResolution.xy * 2.0 - 1.0;
+    if(uv.x>0.0)
+    {
+    uv.x =0.0-uv.x;
+    }
     uv.x *= (iResolution.x / iResolution.y);
-    float mx = iMouse.x > 0.0 ? iMouse.x / iResolution.x : 0.5;
-    float my = iMouse.y > 0.0 ? iMouse.y / iResolution.y : 0.5;
-    uv *= my * 10.0;
+    
+    uv *= 0.5 * 10.0;
     vec3 col = vec3(0.0);
     float n;
     n = fbm(vec3(time, vec2(uv))) * 0.5 + 0.5;
 
-    col = vec3(n * 0.1, n * 0.7, n * 0.8);
-    col = mix(col, vec3(0.5, 0.5, 0.4), 0.5 * sin(time) - 0.5);
-    fragColor = vec4(col, 1.0);
+    col = vec3(0.7,0.7,1.0)- vec3(n*0.8,n*0.6,n*0.1);
+	col = mix(col, vec3(0.9,0.2,0.2), 0.5*sin(time*2.0)-0.5);
+    //col = vec3(n)
+	fragColor = vec4(col,1.0);
+    //fragColor = vec4(fragCoord.x/iResolution.x,fragCoord.y/iResolution.y,0,1);
 }
