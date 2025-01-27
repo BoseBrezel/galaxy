@@ -829,7 +829,7 @@ void main() {
       }
     }
   }
-  if(distance(fragCoord.xy,canvasSize*0.5)< 180.0*(1.0/iDistance)){
+  if(distance(fragCoord.xy,canvasSize*0.5)< 280.0*(1.0/iDistance)){
     color.rgb += returnVec.rgb *100.0/(distance(fragCoord.xy,canvasSize*0.5)*distance(fragCoord.xy,canvasSize*0.5)) ; 
   }
   gl_FragColor = vec4(color.rgb, 1.0);
